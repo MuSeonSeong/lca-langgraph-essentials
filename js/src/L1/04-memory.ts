@@ -1,25 +1,33 @@
 // L1 Memory Example - Checkpointer and state persistence
-// TypeScript equivalent of the memory example from L1.ipynb
 
-import { StateGraph, START, END, Command, MemorySaver } from '@langchain/langgraph';
-import type { State, NodeDestination, GraphConfig } from '../types/index.js';
-import { displayGraphInConsole } from '../utils/mermaid.js';
-import * as readline from 'readline';
+import {
+  StateGraph,
+  START,
+  END,
+  Command,
+  MemorySaver,
+  Annotation,
+} from '@langchain/langgraph';
+import { getUserInput } from '../utils/index.js';
+
+const StateAnnotation = Annotation.Root({
+  nlist: Annotation<string[]>({
+    reducer: (left: string[], right: string[]) => [...left, ...right],
+    default: () => [],
+  }),
+});
+
+type State = typeof StateAnnotation.State;
 
 // Reuse the conditional node logic from previous example
-function nodeA(state: State): Command<NodeDestination> {
+function nodeA(state: State): Command {
   const select = state.nlist[state.nlist.length - 1];
-  let nextNode: NodeDestination;
+  let nextNode: string;
 
-  if (select === 'b') {
-    nextNode = 'b';
-  } else if (select === 'c') {
-    nextNode = 'c';
-  } else if (select === 'q') {
-    nextNode = '__end__';
-  } else {
-    nextNode = '__end__';
-  }
+  if (select === 'b') nextNode = 'b';
+  else if (select === 'c') nextNode = 'c';
+  else if (select === 'q') nextNode = '__end__';
+  else nextNode = '__end__';
 
   return new Command({
     update: { nlist: [select] },
@@ -37,41 +45,19 @@ function nodeC(state: State): Partial<State> {
 
 // Build graph with memory/checkpointer
 export function createMemoryGraph() {
-  const builder = new StateGraph<State>({
-    channels: {
-      nlist: {
-        reducer: (left: string[], right: string[]) => [...left, ...right],
-        default: () => [],
-      },
-    },
-  });
-
-  builder.addNode('a', nodeA);
-  builder.addNode('b', nodeB);
-  builder.addNode('c', nodeC);
-
-  builder.addEdge(START, 'a');
-  builder.addEdge('b', END);
-  builder.addEdge('c', END);
+  const builder = new StateGraph(StateAnnotation)
+    // Add all nodes
+    .addNode('a', nodeA)
+    .addNode('b', nodeB)
+    .addNode('c', nodeC)
+    // Add edges to create conditional execution paths
+    .addEdge(START, 'a')
+    .addEdge('b', END)
+    .addEdge('c', END);
 
   // Compile with checkpointer for persistence
   const memory = new MemorySaver();
   return builder.compile({ checkpointer: memory });
-}
-
-// Utility function for user input
-function getUserInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
 }
 
 // Example usage with memory persistence
@@ -81,27 +67,13 @@ export async function runMemoryExample(): Promise<void> {
   const graph = createMemoryGraph();
 
   // Configuration with thread ID for persistence
-  const config: GraphConfig = {
+  const config = {
     configurable: { thread_id: '1' },
   };
 
-  // Display graph structure
-  const graphDef = `
-graph TD
-    __start__ --> a
-    a -->|"b"| b
-    a -->|"c"| c
-    a -->|"q"| __end__
-    b --> __end__
-    c --> __end__
-
-    subgraph "Memory"
-        Memory[State persisted between invocations]
-    end
-  `;
-  displayGraphInConsole(graphDef, 'Memory-Enabled Graph');
-
-  console.log('This example demonstrates state persistence across multiple invocations.');
+  console.log(
+    'This example demonstrates state persistence across multiple invocations.'
+  );
   console.log('Notice how the state accumulates between runs!\n');
 
   // Interactive loop with memory
@@ -136,8 +108,12 @@ export async function runMultiThreadMemoryExample(): Promise<void> {
 
   const graph = createMemoryGraph();
 
-  const thread1Config: GraphConfig = { configurable: { thread_id: 'thread-1' } };
-  const thread2Config: GraphConfig = { configurable: { thread_id: 'thread-2' } };
+  const thread1Config = {
+    configurable: { thread_id: 'thread-1' },
+  };
+  const thread2Config = {
+    configurable: { thread_id: 'thread-2' },
+  };
 
   // Run some operations on thread 1
   console.log('=== Thread 1 Operations ===');
@@ -166,12 +142,9 @@ export async function runMultiThreadMemoryExample(): Promise<void> {
   console.log('\nNotice how each thread maintains its own separate state!');
 }
 
-// Run if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  if (args.includes('--multi-thread')) {
-    runMultiThreadMemoryExample().catch(console.error);
-  } else {
-    runMemoryExample().catch(console.error);
-  }
+const args = process.argv.slice(2);
+if (args.includes('--multi-thread')) {
+  runMultiThreadMemoryExample().catch(console.error);
+} else {
+  runMemoryExample().catch(console.error);
 }

@@ -1,24 +1,36 @@
 // L1 Interrupts Example - Human-in-the-loop patterns
-// TypeScript equivalent of the interrupt example from L1.ipynb
 
-import { StateGraph, START, END, Command, MemorySaver, interrupt } from '@langchain/langgraph';
-import type { State, NodeDestination, GraphConfig, InterruptData } from '../types/index.js';
-import { displayGraphInConsole } from '../utils/mermaid.js';
-import * as readline from 'readline';
+import {
+  StateGraph,
+  START,
+  END,
+  Command,
+  MemorySaver,
+  interrupt,
+  Annotation,
+} from '@langchain/langgraph';
+import type { InterruptData } from '../types/index.js';
+import { getUserInput } from '../utils/index.js';
+
+const StateAnnotation = Annotation.Root({
+  nlist: Annotation<string[]>({
+    reducer: (left: string[], right: string[]) => [...left, ...right],
+    default: () => [],
+  }),
+});
+
+type State = typeof StateAnnotation.State;
 
 // Node function with interrupt capability
-function nodeA(state: State): Command<NodeDestination> {
+function nodeA(state: State): Command {
   console.log("Entered 'a' node");
   const select = state.nlist[state.nlist.length - 1];
-  let nextNode: NodeDestination;
+  let nextNode: string;
 
-  if (select === 'b') {
-    nextNode = 'b';
-  } else if (select === 'c') {
-    nextNode = 'c';
-  } else if (select === 'q') {
-    nextNode = '__end__';
-  } else {
+  if (select === 'b') nextNode = 'b';
+  else if (select === 'c') nextNode = 'c';
+  else if (select === 'q') nextNode = '__end__';
+  else {
     // Interrupt for unexpected input - equivalent to Python's interrupt()
     const admin = interrupt({
       message: `💥 Unexpected input ${select}! Continue? `,
@@ -52,45 +64,25 @@ function nodeC(state: State): Partial<State> {
 }
 
 // Build graph with interrupts
-export function createInterruptGraph() {
-  const builder = new StateGraph<State>({
-    channels: {
-      nlist: {
-        reducer: (left: string[], right: string[]) => [...left, ...right],
-        default: () => [],
-      },
-    },
-  });
-
-  builder.addNode('a', nodeA);
-  builder.addNode('b', nodeB);
-  builder.addNode('c', nodeC);
-
-  builder.addEdge(START, 'a');
-  builder.addEdge('b', END);
-  builder.addEdge('c', END);
+function createInterruptGraph() {
+  const builder = new StateGraph(StateAnnotation)
+    // Add all nodes
+    .addNode('a', nodeA)
+    .addNode('b', nodeB)
+    .addNode('c', nodeC)
+    // Add edges to create parallel execution paths
+    .addEdge(START, 'a')
+    .addEdge('b', END)
+    .addEdge('c', END);
 
   const memory = new MemorySaver();
   return builder.compile({ checkpointer: memory });
 }
 
-// Utility function for user input
-function getUserInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
-
 // Check if result contains an interrupt
-function hasInterrupt(result: any): result is { __interrupt__: InterruptData[] } {
+function hasInterrupt(
+  result: any
+): result is { __interrupt__: InterruptData[] } {
   return result && result.__interrupt__ && Array.isArray(result.__interrupt__);
 }
 
@@ -99,29 +91,14 @@ export async function runInterruptExample(): Promise<void> {
   console.log('\n=== L1: Interrupts Example ===\n');
 
   const graph = createInterruptGraph();
-  const config: GraphConfig = { configurable: { thread_id: '1' } };
+  const config = { configurable: { thread_id: '1' } };
 
-  // Display graph structure
-  const graphDef = `
-graph TD
-    __start__ --> a
-    a -->|"b"| b
-    a -->|"c"| c
-    a -->|"q"| __end__
-    a -->|"unexpected"| interrupt[Interrupt!]
-    interrupt -->|"continue"| b
-    interrupt -->|"quit"| __end__
-    b --> __end__
-    c --> __end__
-
-    subgraph "Human-in-the-Loop"
-        interrupt
-    end
-  `;
-  displayGraphInConsole(graphDef, 'Interrupt-Enabled Graph');
-
-  console.log('This example demonstrates human-in-the-loop patterns with interrupts.');
-  console.log('Try entering unexpected input (not "b", "c", or "q") to trigger an interrupt.\n');
+  console.log(
+    'This example demonstrates human-in-the-loop patterns with interrupts.'
+  );
+  console.log(
+    'Try entering unexpected input (not "b", "c", or "q") to trigger an interrupt.\n'
+  );
 
   // Interactive loop with interrupt handling
   while (true) {
@@ -138,7 +115,8 @@ graph TD
       console.log(`${'-'.repeat(80)}`);
       console.log('Interrupt:', result);
 
-      const interruptMessage = result.__interrupt__[result.__interrupt__.length - 1];
+      const interruptMessage =
+        result.__interrupt__[result.__interrupt__.length - 1];
       const msg = (interruptMessage as any).value?.message || 'Continue?';
       const human = await getUserInput(`\n${msg}: `);
 
@@ -160,11 +138,17 @@ graph TD
   }
 
   console.log('\n=== Takeaways ===');
-  console.log('- interrupt() statement pauses operation and returns value in __interrupt__ field');
-  console.log('- When graph is invoked with Command containing resume, operation continues');
+  console.log(
+    '- interrupt() statement pauses operation and returns value in __interrupt__ field'
+  );
+  console.log(
+    '- When graph is invoked with Command containing resume, operation continues'
+  );
   console.log('- Node is restarted from the beginning');
   console.log('- Checkpointer replays responses to interrupts');
-  console.log('- Enables human oversight and intervention in automated workflows\n');
+  console.log(
+    '- Enables human oversight and intervention in automated workflows\n'
+  );
 }
 
 // Demonstration of programmatic interrupt handling
@@ -172,7 +156,7 @@ export async function runProgrammaticInterruptExample(): Promise<void> {
   console.log('\n=== L1: Programmatic Interrupt Handling ===\n');
 
   const graph = createInterruptGraph();
-  const config: GraphConfig = { configurable: { thread_id: 'programmatic' } };
+  const config = { configurable: { thread_id: 'programmatic' } };
 
   // Test with unexpected input
   const inputState: State = {
@@ -197,12 +181,9 @@ export async function runProgrammaticInterruptExample(): Promise<void> {
   }
 }
 
-// Run if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-  if (args.includes('--programmatic')) {
-    runProgrammaticInterruptExample().catch(console.error);
-  } else {
-    runInterruptExample().catch(console.error);
-  }
+const args = process.argv.slice(2);
+if (args.includes('--programmatic')) {
+  runProgrammaticInterruptExample().catch(console.error);
+} else {
+  runInterruptExample().catch(console.error);
 }

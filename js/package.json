@@ -1,43 +1,39 @@
 {
   "name": "langgraph-js-essentials",
-  "version": "0.0.0",
+  "private": true,
   "description": "LangGraph JavaScript/TypeScript tutorial examples",
   "type": "module",
-  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/examples/basic-usage.ts",
-    "serve": "npx @langchain/langgraph-cli dev",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "clean": "rm -rf dist"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@langchain/langgraph": "^0.2.21",
-    "@langchain/core": "^0.3.24",
-    "@langchain/openai": "^0.3.17",
     "@langchain/anthropic": "^0.3.8",
     "@langchain/community": "^0.3.22",
+    "@langchain/core": "^0.3.24",
+    "@langchain/langgraph": "^0.2.21",
     "@langchain/langgraph-sdk": "^0.1.6",
-    "mermaid": "^10.6.0",
+    "@langchain/openai": "^0.3.17",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@langchain/langgraph-cli": "latest",
+    "@mermaid-js/mermaid-cli": "^11.12.0",
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.0",
-    "typescript": "^5.0.0",
-    "tsx": "^4.0.0",
-    "eslint": "^8.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "mermaid": "^11.12.0",
     "prettier": "^3.0.0",
+    "terminal-image": "^4.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
     "vitest": "^1.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "keywords": [
     "langgraph",

@@ -1,11 +1,17 @@
 // L1 Index - LangGraph StateGraph Essentials
 // Main entry point for all L1 examples
 
-import { runSimpleNodeExample } from './simple-node.js';
-import { runParallelExecutionExample } from './parallel-execution.js';
-import { runConditionalEdgesExample, runConditionalEdgesInteractive } from './conditional-edges.js';
-import { runMemoryExample, runMultiThreadMemoryExample } from './memory.js';
-import { runInterruptExample, runProgrammaticInterruptExample } from './interrupts.js';
+import { runSimpleNodeExample } from './01-simple-node.js';
+import { runParallelExecutionExample } from './02-parallel-execution.js';
+import {
+  runConditionalEdgesExample,
+  runConditionalEdgesInteractive,
+} from './03-conditional-edges.js';
+import { runMemoryExample, runMultiThreadMemoryExample } from './04-memory.js';
+import {
+  runInterruptExample,
+  runProgrammaticInterruptExample,
+} from './05-interrupts.js';
 
 // Main function to run all L1 examples
 export async function runAllL1Examples(): Promise<void> {
@@ -71,16 +77,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (args.includes('--help')) {
     console.log('L1 Examples Usage:');
     console.log('------------------');
-    console.log('npm run dev                    # Run all examples');
+    console.log('npm run dev                   # Run all examples');
     console.log('node dist/L1/index.js         # Run all examples');
     console.log('node dist/L1/index.js --interactive  # Interactive mode');
     console.log('');
     console.log('Individual examples:');
-    console.log('node dist/L1/simple-node.js');
-    console.log('node dist/L1/parallel-execution.js');
-    console.log('node dist/L1/conditional-edges.js [--interactive]');
-    console.log('node dist/L1/memory.js [--multi-thread]');
-    console.log('node dist/L1/interrupts.js [--programmatic]');
+    console.log('node dist/L1/01-simple-node.js');
+    console.log('node dist/L1/02-parallel-execution.js');
+    console.log('node dist/L1/03-conditional-edges.js [--interactive]');
+    console.log('node dist/L1/04-memory.js [--multi-thread]');
+    console.log('node dist/L1/05-interrupts.js [--programmatic]');
   } else {
     runAllL1Examples().catch(console.error);
   }

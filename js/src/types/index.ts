@@ -2,16 +2,6 @@
 
 import { Annotation } from '@langchain/langgraph';
 
-// L1 State Annotations - using modern LangGraph.js Annotation API
-export const StateAnnotation = Annotation.Root({
-  nlist: Annotation<string[]>({
-    reducer: (left: string[], right: string[]) => [...left, ...right],
-    default: () => [],
-  }),
-});
-
-export type State = typeof StateAnnotation.State;
-
 // From L2 - Email classification structure
 export interface EmailClassification {
   intent: 'question' | 'bug' | 'billing' | 'feature' | 'complex';
