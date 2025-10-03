@@ -55,7 +55,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 # Optional: For evaluation and tracing
 LANGSMITH_API_KEY=your_langsmith_api_key_here
 LANGSMITH_TRACING=true
-LANGSMITH_PROJECT=deep-agents-from-scratch
+LANGSMITH_PROJECT=lg_essentials
 ```
 
 4. Run notebooks or code using uv:
