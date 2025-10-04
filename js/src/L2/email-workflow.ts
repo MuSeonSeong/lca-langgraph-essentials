@@ -1,29 +1,54 @@
 // L2 Email Workflow - Complete email processing workflow
-// TypeScript equivalent of the L2.ipynb email workflow
 
-import { StateGraph, START, END, Command, MemorySaver, interrupt } from '@langchain/langgraph';
+import {
+  StateGraph,
+  START,
+  END,
+  Command,
+  MemorySaver,
+  interrupt,
+} from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
 import {
   EmailStateAnnotation,
   type EmailAgentState,
-  type EmailClassification,
   type GraphConfig,
-  type WorkflowDestination
+  type WorkflowDestination,
 } from '../types/index.js';
 import { displayGraphInConsole } from '../utils/mermaid.js';
-import { generateId } from '../utils/index.js';
-import * as readline from 'readline';
+import { generateId, getUserInput } from '../utils/index.js';
+import z from 'zod';
 
-// Initialize LLM
 const llm = new ChatOpenAI({
-  model: 'gpt-4o-mini',
+  model: 'gpt-5',
   temperature: 0,
 });
 
-// Node Functions
-
 /**
- * Extract and parse email content
+ * Read and process incoming email
+ *
+ * This node serves as the entry point for the email workflow. In production,
+ * this would connect to your email service (e.g., Gmail API, Exchange, IMAP)
+ * to fetch email content. Currently, it acts as a pass-through node that logs
+ * the sender information.
+ *
+ * @param state - The current email agent state containing sender_email and email_content
+ * @returns Empty partial state (passes through unchanged)
+ *
+ * @remarks
+ * The email_content is expected to be passed in when the graph is initially invoked.
+ * This function primarily serves to log the processing start and could be extended
+ * to perform email validation, spam filtering, or other preprocessing tasks.
+ *
+ * @example
+ * ```typescript
+ * const result = readEmail({
+ *   email_content: "Hello, I need help with...",
+ *   sender_email: "customer@example.com"
+ * });
+ * // Logs: "Processing email from: customer@example.com"
+ * // Returns: {}
+ * ```
  */
 function readEmail(state: EmailAgentState): Partial<EmailAgentState> {
   // In production, this would connect to your email service
@@ -33,31 +58,44 @@ function readEmail(state: EmailAgentState): Partial<EmailAgentState> {
 }
 
 /**
- * Use LLM to classify email intent and urgency, then route accordingly
+ * Classify email intent and urgency using AI
+ *
+ * Analyzes the email content and sender information to determine:
+ * - Intent: The purpose of the email (question, bug, billing, feature, complex)
+ * - Urgency: The priority level (low, medium, high, critical)
+ * - Topic: The main subject matter
+ * - Summary: A brief description of the email content
+ *
+ * @param state - The current email agent state containing email_content and sender_email
+ * @returns Partial state update with classification results, or fallback classification on error
+ *
+ * @example
+ * ```typescript
+ * const result = await classifyIntent({
+ *   email_content: "Our production system is down!",
+ *   sender_email: "customer@example.com"
+ * });
+ * // Returns: { classification: { intent: 'bug', urgency: 'critical', ... } }
+ * ```
  */
-async function classifyIntent(state: EmailAgentState): Promise<Partial<EmailAgentState>> {
+async function classifyIntent(
+  state: EmailAgentState
+): Promise<Partial<EmailAgentState>> {
   console.log('Classifying email intent and urgency...');
 
   // Create structured LLM that returns EmailClassification
-  const structuredLlm = llm.withStructuredOutput({
-    name: 'EmailClassification',
-    schema: {
-      type: 'object',
-      properties: {
-        intent: {
-          type: 'string',
-          enum: ['question', 'bug', 'billing', 'feature', 'complex'],
-        },
-        urgency: {
-          type: 'string',
-          enum: ['low', 'medium', 'high', 'critical'],
-        },
-        topic: { type: 'string' },
-        summary: { type: 'string' },
-      },
-      required: ['intent', 'urgency', 'topic', 'summary'],
-    },
-  });
+  const structuredLlm = llm.withStructuredOutput(
+    z.object({
+      intent: z
+        .enum(['question', 'bug', 'billing', 'feature', 'complex'])
+        .describe('The purpose of the email'),
+      urgency: z
+        .enum(['low', 'medium', 'high', 'critical'])
+        .describe('The priority level'),
+      topic: z.string().describe('The main subject matter'),
+      summary: z.string().describe('A brief description of the email content'),
+    })
+  );
 
   // Format the prompt on-demand
   const classificationPrompt = `
@@ -71,7 +109,7 @@ Provide classification, including intent, urgency, topic, and summary.
 
   try {
     // Get structured response directly as object
-    const classification = await structuredLlm.invoke(classificationPrompt) as EmailClassification;
+    const classification = await structuredLlm.invoke(classificationPrompt);
     console.log('Classification:', classification);
 
     return { classification };
@@ -90,17 +128,47 @@ Provide classification, including intent, urgency, topic, and summary.
 }
 
 /**
- * Search knowledge base for relevant information
+ * Search documentation for relevant information based on email classification
+ *
+ * Queries the documentation system to find relevant articles, FAQs, and knowledge base
+ * entries that can help answer the customer's email. The search is tailored based on
+ * the email's classified intent and topic.
+ *
+ * @param state - The current email agent state containing classification information
+ * @returns Partial state update with search_results array, or error message on failure
+ *
+ * @remarks
+ * This is currently a mock implementation that returns simulated search results.
+ * In production, this would integrate with your actual search API or documentation
+ * system (e.g., Elasticsearch, Algolia, or a vector database).
+ *
+ * The function uses the classification data (intent and topic) to generate contextually
+ * relevant search results. If classification is not available, it falls back to generic
+ * search parameters.
+ *
+ * @example
+ * ```typescript
+ * const result = await searchDocumentation({
+ *   classification: {
+ *     intent: 'bug',
+ *     topic: 'authentication',
+ *     urgency: 'high',
+ *     summary: 'Login issues'
+ *   }
+ * });
+ * // Returns: { search_results: ['Documentation for bug: ...', 'FAQ entry: ...', ...] }
+ * ```
  */
-async function searchDocumentation(state: EmailAgentState): Promise<Partial<EmailAgentState>> {
+async function searchDocumentation(
+  state: EmailAgentState
+): Promise<Partial<EmailAgentState>> {
   console.log('Searching documentation...');
 
   // Build search query from classification
-  const classification = state.classification || {
+  const classification = state.classification ?? {
     intent: 'question',
     topic: 'general',
   };
-  const query = `${classification.intent} ${classification.topic}`;
 
   try {
     // Mock search results - in production, this would integrate with your search API
@@ -121,9 +189,37 @@ async function searchDocumentation(state: EmailAgentState): Promise<Partial<Emai
 }
 
 /**
- * Create or update bug tracking ticket
+ * Create a bug tracking ticket for the email
+ *
+ * Generates a new bug tracking ticket in the system when an email is classified
+ * as a bug report. This function creates a unique ticket ID and would typically
+ * integrate with your bug tracking system (e.g., Jira, GitHub Issues, Linear).
+ *
+ * @param state - The current email agent state containing email details
+ * @returns Partial state update with the generated ticket_id
+ *
+ * @remarks
+ * This is currently a mock implementation that generates a ticket ID using the
+ * format "BUG_[unique_id]". In production, this would:
+ * - Create an actual ticket in your bug tracking system
+ * - Include email content, classification, and customer information
+ * - Set appropriate priority and labels based on urgency
+ * - Link to customer history if available
+ * - Return the real ticket ID from the tracking system
+ *
+ * @example
+ * ```typescript
+ * const result = await bugTracking({
+ *   email_content: "The login button is not working",
+ *   classification: { intent: 'bug', urgency: 'high' }
+ * });
+ * // Returns: { ticket_id: 'BUG_abc123xyz' }
+ * // Logs: "Created ticket: BUG_abc123xyz"
+ * ```
  */
-async function bugTracking(state: EmailAgentState): Promise<Partial<EmailAgentState>> {
+async function bugTracking(
+  state: EmailAgentState
+): Promise<Partial<EmailAgentState>> {
   console.log('Creating bug tracking ticket...');
 
   // Create ticket in your bug tracking system
@@ -134,12 +230,46 @@ async function bugTracking(state: EmailAgentState): Promise<Partial<EmailAgentSt
 }
 
 /**
- * Generate response using context and route based on quality
+ * Generate an AI-powered email response draft
+ *
+ * Creates a contextual response to the customer email using AI, incorporating
+ * relevant documentation, customer history, and classification information.
+ * Automatically determines if human review is required based on urgency and
+ * complexity, then routes to the appropriate next step.
+ *
+ * @param state - The current email agent state containing email content, classification, search results, and customer history
+ * @returns Command object with the draft response and routing decision
+ *
+ * @remarks
+ * The function performs several key operations:
+ * - Gathers context from search results and customer history
+ * - Constructs a prompt with email content, classification, and context
+ * - Generates a response using the LLM
+ * - Determines if human review is needed (high/critical urgency or complex intent)
+ * - Routes to either 'human_review' or 'send_reply' accordingly
+ *
+ * Human review is triggered when:
+ * - Urgency is 'high' or 'critical'
+ * - Intent is classified as 'complex'
+ *
+ * On error, the function returns a fallback message and routes to human review
+ * for safety.
+ *
+ * @example
+ * ```typescript
+ * const result = await writeResponse({
+ *   email_content: "How do I reset my password?",
+ *   classification: { intent: 'question', urgency: 'low' },
+ *   search_results: ['Password reset guide: ...'],
+ *   customer_history: { tier: 'premium' }
+ * });
+ * // Returns: Command with draft_response and goto: 'send_reply'
+ * ```
  */
-async function writeResponse(state: EmailAgentState): Promise<Command<WorkflowDestination>> {
+async function writeResponse(state: EmailAgentState) {
   console.log('Writing response...');
 
-  const classification = state.classification || {
+  const classification = state.classification ?? {
     intent: 'question',
     urgency: 'medium',
   };
@@ -156,7 +286,7 @@ async function writeResponse(state: EmailAgentState): Promise<Command<WorkflowDe
 
   if (state.customer_history) {
     contextSections.push(
-      `Customer tier: ${state.customer_history.tier || 'standard'}`
+      `Customer tier: ${state.customer_history.tier ?? 'standard'}`
     );
   }
 
@@ -187,11 +317,11 @@ Guidelines:
       classification.intent === 'complex';
 
     // Route to the appropriate next node
-    const goto: WorkflowDestination = needsReview ? 'human_review' : 'send_reply';
+    const goto: WorkflowDestination = needsReview
+      ? 'human_review'
+      : 'send_reply';
 
-    if (needsReview) {
-      console.log('Needs approval');
-    }
+    if (needsReview) console.log('Needs approval');
 
     return new Command({
       update: { draft_response: response.content },
@@ -200,17 +330,43 @@ Guidelines:
   } catch (error) {
     console.error('Error writing response:', error);
     return new Command({
-      update: { draft_response: 'Error generating response. Please try again.' },
+      update: {
+        draft_response: 'Error generating response. Please try again.',
+      },
       goto: 'human_review',
     });
   }
 }
 
 /**
- * Pause for human review using interrupt and route based on decision
+ * Human review node for email response approval
+ *
+ * This node pauses the workflow execution to allow a human reviewer to approve,
+ * edit, or reject the drafted email response. It uses the interrupt() function
+ * to halt execution and wait for human input.
+ *
+ * @param state - The current email agent state containing the draft response and classification
+ * @returns Command object directing the workflow to either send the reply or end
+ *
+ * @remarks
+ * The interrupt() call must come first in the function - any code before it will
+ * re-run when the workflow resumes. The human reviewer can:
+ * - Approve the draft as-is (routes to 'send_reply')
+ * - Edit and approve the draft (routes to 'send_reply' with edited content)
+ * - Reject the draft (routes to '__end__', human will handle directly)
+ *
+ * @example
+ * ```typescript
+ * // When workflow is paused, human provides decision:
+ * const decision = {
+ *   approved: true,
+ *   edited_response: "Updated response text..."
+ * };
+ * // Workflow resumes and routes to 'send_reply' with edited response
+ * ```
  */
-async function humanReview(state: EmailAgentState): Promise<Command<WorkflowDestination | '__end__'>> {
-  const classification = state.classification || {
+async function humanReview(state: EmailAgentState) {
+  const classification = state.classification ?? {
     urgency: 'medium',
     intent: 'question',
   };
@@ -219,14 +375,18 @@ async function humanReview(state: EmailAgentState): Promise<Command<WorkflowDest
   const humanDecision = interrupt({
     email_id: state.email_id,
     original_email: state.email_content,
-    draft_response: state.draft_response || '',
+    draft_response: state.draft_response ?? '',
     urgency: classification.urgency,
     intent: classification.intent,
     action: 'Please review and approve/edit this response',
   });
 
   // Process the human's decision
-  if (humanDecision && typeof humanDecision === 'object' && 'approved' in humanDecision) {
+  if (
+    humanDecision &&
+    typeof humanDecision === 'object' &&
+    'approved' in humanDecision
+  ) {
     if (humanDecision.approved) {
       const editedResponse =
         (humanDecision as any).edited_response || state.draft_response;
@@ -251,9 +411,34 @@ async function humanReview(state: EmailAgentState): Promise<Command<WorkflowDest
 }
 
 /**
- * Send the email response
+ * Send the final email response to the customer
+ *
+ * This node handles the actual sending of the email response. In production,
+ * this would integrate with your email service (e.g., Gmail API, SendGrid, SMTP)
+ * to deliver the response to the customer. Currently, it logs a preview of the
+ * response being sent.
+ *
+ * @param state - The current email agent state containing draft_response
+ * @returns Empty partial state (email sending is a side effect)
+ *
+ * @remarks
+ * This is the final step in the email workflow after the response has been
+ * drafted and optionally reviewed by a human. The function expects draft_response
+ * to be populated in the state.
+ *
+ * @example
+ * ```typescript
+ * const result = await sendReply({
+ *   draft_response: "Thank you for contacting us. Here's the solution...",
+ *   sender_email: "customer@example.com"
+ * });
+ * // Logs: "Sending reply: Thank you for contacting us. Here's the solution..."
+ * // Returns: {}
+ * ```
  */
-async function sendReply(state: EmailAgentState): Promise<Partial<EmailAgentState>> {
+async function sendReply(
+  state: EmailAgentState
+): Promise<Partial<EmailAgentState>> {
   // Integrate with email service
   const preview = state.draft_response?.substring(0, 60) + '...';
   console.log(`Sending reply: ${preview}`);
@@ -264,48 +449,31 @@ async function sendReply(state: EmailAgentState): Promise<Partial<EmailAgentStat
 
 // Build the Email Workflow Graph
 export function createEmailWorkflowGraph() {
-  const builder = new StateGraph(EmailStateAnnotation);
-
-  // Add nodes - nodes with Command returns need ends arrays
-  builder.addNode('read_email', readEmail);
-  builder.addNode('classify_intent', classifyIntent);
-  builder.addNode('search_documentation', searchDocumentation);
-  builder.addNode('bug_tracking', bugTracking);
-  builder.addNode('write_response', writeResponse, {
-    ends: ['human_review', 'send_reply']
-  });
-  builder.addNode('human_review', humanReview, {
-    ends: ['send_reply', '__end__']
-  });
-  builder.addNode('send_reply', sendReply);
-
-  // Add edges
-  builder.addEdge(START, 'read_email');
-  builder.addEdge('read_email', 'classify_intent');
-  builder.addEdge('classify_intent', 'search_documentation');
-  builder.addEdge('classify_intent', 'bug_tracking');
-  builder.addEdge('search_documentation', 'write_response');
-  builder.addEdge('bug_tracking', 'write_response');
-  builder.addEdge('send_reply', END);
+  const builder = new StateGraph(EmailStateAnnotation)
+    // Add nodes - nodes with Command returns need ends arrays
+    .addNode('read_email', readEmail)
+    .addNode('classify_intent', classifyIntent)
+    .addNode('search_documentation', searchDocumentation)
+    .addNode('bug_tracking', bugTracking)
+    .addNode('write_response', writeResponse, {
+      ends: ['human_review', 'send_reply'],
+    })
+    .addNode('human_review', humanReview, {
+      ends: ['send_reply', '__end__'],
+    })
+    .addNode('send_reply', sendReply)
+    // Add edges
+    .addEdge(START, 'read_email')
+    .addEdge('read_email', 'classify_intent')
+    .addEdge('classify_intent', 'search_documentation')
+    .addEdge('classify_intent', 'bug_tracking')
+    .addEdge('search_documentation', 'write_response')
+    .addEdge('bug_tracking', 'write_response')
+    .addEdge('send_reply', END);
 
   // Compile with checkpointer for persistence
   const memory = new MemorySaver();
   return builder.compile({ checkpointer: memory });
-}
-
-// Utility functions for user interaction
-function getUserInput(prompt: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
 }
 
 function hasInterrupt(result: any): boolean {
@@ -366,7 +534,9 @@ graph TD
 
   // Handle potential interrupt
   if (hasInterrupt(result)) {
-    console.log(`\nDraft ready for review: ${result.draft_response?.substring(0, 60)}...\n`);
+    console.log(
+      `\nDraft ready for review: ${result.draft_response?.substring(0, 60)}...\n`
+    );
 
     // Simulate human approval
     const humanResponse = new Command({
@@ -392,7 +562,7 @@ export async function runBatchEmailExample(): Promise<void> {
     'I was charged two times for my subscription! This is urgent!',
     'I was wondering if this was available in blue?',
     'Can you tell me how long the sale is on?',
-    'The tire won\'t stay on the car!',
+    "The tire won't stay on the car!",
     'My subscription is going to end in a few months, what is the new rate?',
   ];
 
@@ -451,7 +621,9 @@ export async function runInteractiveEmailDemo(): Promise<void> {
 
   while (true) {
     console.log('\n--- New Email ---');
-    const emailContent = await getUserInput('Enter email content (or "quit" to exit): ');
+    const emailContent = await getUserInput(
+      'Enter email content (or "quit" to exit): '
+    );
 
     if (emailContent.toLowerCase() === 'quit') {
       break;
@@ -478,7 +650,8 @@ export async function runInteractiveEmailDemo(): Promise<void> {
       console.log('Draft response:', result.draft_response);
 
       const approval = await getUserInput('Approve this response? (y/n): ');
-      const approved = approval.toLowerCase() === 'y' || approval.toLowerCase() === 'yes';
+      const approved =
+        approval.toLowerCase() === 'y' || approval.toLowerCase() === 'yes';
 
       let editedResponse = result.draft_response;
       if (approved && approval.toLowerCase() !== 'y') {
@@ -499,8 +672,7 @@ export async function runInteractiveEmailDemo(): Promise<void> {
   }
 }
 
-// Run if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (require.main === module) {
   const args = process.argv.slice(2);
 
   if (args.includes('--batch')) {
