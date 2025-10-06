@@ -1,22 +1,16 @@
 // L1 Simple Node Example - Basic state/node functionality
 
 import { StateGraph, START, END } from '@langchain/langgraph';
-import { registry } from '@langchain/langgraph/zod';
 import z from 'zod';
 
 const StateDefinition = z.object({
-  nlist: z.array(z.string()).register(registry, {
-    reducer: {
-      fn: (left: string[], right: string[]) => [...left, ...right],
-    },
-    default: () => [],
-  }),
+  nlist: z.array(z.string()),
 });
 
 type State = z.infer<typeof StateDefinition>;
 
 // Define the node function
-function nodeA(state: State): Partial<State> {
+function nodeA(state: State) {
   console.log(`node a is receiving ${JSON.stringify(state.nlist)}`);
   const note = 'Hello World from Node a';
   console.log(note);
