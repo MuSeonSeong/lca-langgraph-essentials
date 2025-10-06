@@ -6,18 +6,20 @@ import {
   END,
   Command,
   MemorySaver,
-  Annotation,
 } from '@langchain/langgraph';
-import { getUserInput } from '../utils/index.js';
+import { registry } from '@langchain/langgraph/zod';
+import z from 'zod';
 
-const StateAnnotation = Annotation.Root({
-  nlist: Annotation<string[]>({
-    reducer: (left: string[], right: string[]) => [...left, ...right],
+const StateDefinition = z.object({
+  nlist: z.array(z.string()).register(registry, {
+    reducer: {
+      fn: (left: string[], right: string[]) => [...left, ...right],
+    },
     default: () => [],
   }),
 });
 
-type State = typeof StateAnnotation.State;
+type State = z.infer<typeof StateDefinition>;
 
 // Reuse the conditional node logic from previous example
 function nodeA(state: State): Command {
@@ -26,8 +28,8 @@ function nodeA(state: State): Command {
 
   if (select === 'b') nextNode = 'b';
   else if (select === 'c') nextNode = 'c';
-  else if (select === 'q') nextNode = '__end__';
-  else nextNode = '__end__';
+  else if (select === 'q') nextNode = END;
+  else nextNode = END;
 
   return new Command({
     update: { nlist: [select] },
@@ -43,70 +45,24 @@ function nodeC(state: State): Partial<State> {
   return { nlist: ['C'] };
 }
 
+// Define the checkpointer to use for persistence
+const memory = new MemorySaver();
+
 // Build graph with memory/checkpointer
-export function createMemoryGraph() {
-  const builder = new StateGraph(StateAnnotation)
-    // Add all nodes
-    .addNode('a', nodeA)
-    .addNode('b', nodeB)
-    .addNode('c', nodeC)
-    // Add edges to create conditional execution paths
-    .addEdge(START, 'a')
-    .addEdge('b', END)
-    .addEdge('c', END);
-
+export const graph = new StateGraph(StateDefinition)
+  // Add all nodes
+  .addNode('a', nodeA, { ends: ['b', 'c'] })
+  .addNode('b', nodeB)
+  .addNode('c', nodeC)
+  // Add edges to create conditional execution paths
+  .addEdge(START, 'a')
+  .addEdge('b', END)
+  .addEdge('c', END)
   // Compile with checkpointer for persistence
-  const memory = new MemorySaver();
-  return builder.compile({ checkpointer: memory });
-}
+  .compile({ checkpointer: memory });
 
-// Example usage with memory persistence
-export async function runMemoryExample(): Promise<void> {
-  console.log('\n=== L1: Memory Example ===\n');
-
-  const graph = createMemoryGraph();
-
-  // Configuration with thread ID for persistence
-  const config = {
-    configurable: { thread_id: '1' },
-  };
-
-  console.log(
-    'This example demonstrates state persistence across multiple invocations.'
-  );
-  console.log('Notice how the state accumulates between runs!\n');
-
-  // Interactive loop with memory
-  while (true) {
-    const user = await getUserInput('b, c, or q to quit: ');
-
-    const inputState: State = {
-      nlist: [user],
-    };
-
-    // Invoke with config containing thread_id for persistence
-    const result = await graph.invoke(inputState, config);
-    console.log(result);
-
-    if (result.nlist[result.nlist.length - 1] === 'q') {
-      console.log('quit');
-      break;
-    }
-  }
-
-  console.log('\n=== Takeaways ===');
-  console.log('- MemorySaver provides checkpoint memory capability');
-  console.log('- Graph compiled with checkpointer parameter');
-  console.log('- Invoke graph with thread_id in configuration');
-  console.log('- State is preserved between invocations');
-  console.log('- Each thread_id maintains separate state\n');
-}
-
-// Demonstration of multiple threads
-export async function runMultiThreadMemoryExample(): Promise<void> {
+if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('\n=== L1: Multi-Thread Memory Example ===\n');
-
-  const graph = createMemoryGraph();
 
   const thread1Config = {
     configurable: { thread_id: 'thread-1' },
@@ -140,11 +96,4 @@ export async function runMultiThreadMemoryExample(): Promise<void> {
   console.log('Thread 2 final state:', finalResult2);
 
   console.log('\nNotice how each thread maintains its own separate state!');
-}
-
-const args = process.argv.slice(2);
-if (args.includes('--multi-thread')) {
-  runMultiThreadMemoryExample().catch(console.error);
-} else {
-  runMemoryExample().catch(console.error);
 }

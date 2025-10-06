@@ -7,22 +7,43 @@ import {
   Command,
   MemorySaver,
   interrupt,
+  Annotation,
 } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
-import {
-  EmailStateAnnotation,
-  type EmailAgentState,
-  type GraphConfig,
-  type WorkflowDestination,
-} from '../types/index.js';
-import { displayGraphInConsole } from '../utils/mermaid.js';
-import { generateId, getUserInput } from '../utils/index.js';
+import { generateId, getUserInput } from '../utils.js';
 import z from 'zod';
 
 const llm = new ChatOpenAI({
   model: 'gpt-5',
   temperature: 0,
 });
+
+// From L2 - Email classification structure
+export interface EmailClassification {
+  intent: 'question' | 'bug' | 'billing' | 'feature' | 'complex';
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  topic: string;
+  summary: string;
+}
+
+// L2 Email State Annotation
+export const EmailStateAnnotation = Annotation.Root({
+  // Raw email data
+  email_content: Annotation<string>,
+  sender_email: Annotation<string>,
+  email_id: Annotation<string>,
+  // Classification result
+  classification: Annotation<EmailClassification | undefined>,
+  // Bug Tracking
+  ticket_id: Annotation<string | undefined>,
+  // Raw search/API results
+  search_results: Annotation<string[] | undefined>,
+  customer_history: Annotation<Record<string, any> | undefined>,
+  // Generated content
+  draft_response: Annotation<string | undefined>,
+});
+
+export type EmailAgentState = typeof EmailStateAnnotation.State;
 
 /**
  * Read and process incoming email
@@ -317,9 +338,7 @@ Guidelines:
       classification.intent === 'complex';
 
     // Route to the appropriate next node
-    const goto: WorkflowDestination = needsReview
-      ? 'human_review'
-      : 'send_reply';
+    const goto = needsReview ? 'human_review' : 'send_reply';
 
     if (needsReview) console.log('Needs approval');
 
@@ -353,7 +372,7 @@ Guidelines:
  * re-run when the workflow resumes. The human reviewer can:
  * - Approve the draft as-is (routes to 'send_reply')
  * - Edit and approve the draft (routes to 'send_reply' with edited content)
- * - Reject the draft (routes to '__end__', human will handle directly)
+ * - Reject the draft (routes to END, human will handle directly)
  *
  * @example
  * ```typescript
@@ -389,7 +408,7 @@ async function humanReview(state: EmailAgentState) {
   ) {
     if (humanDecision.approved) {
       const editedResponse =
-        (humanDecision as any).edited_response || state.draft_response;
+        humanDecision.edited_response ?? state.draft_response;
       return new Command({
         update: { draft_response: editedResponse },
         goto: 'send_reply',
@@ -398,7 +417,7 @@ async function humanReview(state: EmailAgentState) {
       // Rejection means human will handle directly
       return new Command({
         update: {},
-        goto: '__end__',
+        goto: END,
       });
     }
   }
@@ -455,12 +474,8 @@ export function createEmailWorkflowGraph() {
     .addNode('classify_intent', classifyIntent)
     .addNode('search_documentation', searchDocumentation)
     .addNode('bug_tracking', bugTracking)
-    .addNode('write_response', writeResponse, {
-      ends: ['human_review', 'send_reply'],
-    })
-    .addNode('human_review', humanReview, {
-      ends: ['send_reply', '__end__'],
-    })
+    .addNode('write_response', writeResponse)
+    .addNode('human_review', humanReview)
     .addNode('send_reply', sendReply)
     // Add edges
     .addEdge(START, 'read_email')
@@ -490,40 +505,14 @@ export async function runSingleEmailExample(): Promise<void> {
 
   const app = createEmailWorkflowGraph();
 
-  // Display graph structure
-  const graphDef = `
-graph TD
-    __start__ --> read_email
-    read_email --> classify_intent
-    classify_intent --> search_documentation
-    classify_intent --> bug_tracking
-    search_documentation --> write_response
-    bug_tracking --> write_response
-    write_response -->|needs_review| human_review
-    write_response -->|auto_send| send_reply
-    human_review -->|approved| send_reply
-    human_review -->|rejected| __end__
-    send_reply --> __end__
-
-    subgraph "Parallel Processing"
-        search_documentation
-        bug_tracking
-    end
-
-    subgraph "Human-in-the-Loop"
-        human_review
-    end
-  `;
-  displayGraphInConsole(graphDef, 'Email Processing Workflow');
-
   // Test with an urgent billing issue
-  const initialState: EmailAgentState = {
+  const initialState: Partial<EmailAgentState> = {
     email_content: 'I was charged twice for my subscription! This is urgent!',
     sender_email: 'customer@example.com',
     email_id: 'email_123',
   };
 
-  const config: GraphConfig = {
+  const config = {
     configurable: { thread_id: 'customer_123' },
   };
 
@@ -539,11 +528,10 @@ graph TD
     );
 
     // Simulate human approval
-    const humanResponse = new Command({
-      resume: { approved: true },
-    });
-
-    result = await app.invoke(humanResponse, config);
+    result = await app.invoke(
+      new Command({ resume: { approved: true } }),
+      config
+    );
     console.log('Email sent successfully!');
   }
 
@@ -569,7 +557,7 @@ export async function runBatchEmailExample(): Promise<void> {
   const needsApproval: any[] = [];
 
   for (const [i, content] of emailContent.entries()) {
-    const initialState: EmailAgentState = {
+    const initialState: Partial<EmailAgentState> = {
       email_content: content,
       sender_email: 'customer@example.com',
       email_id: `email_${i}`,
@@ -578,7 +566,7 @@ export async function runBatchEmailExample(): Promise<void> {
     console.log(`${initialState.email_id}: `, '');
 
     const threadId = generateId();
-    const config: GraphConfig = {
+    const config = {
       configurable: { thread_id: threadId },
     };
 
@@ -598,15 +586,16 @@ export async function runBatchEmailExample(): Promise<void> {
   for (const pendingEmail of needsApproval) {
     console.log(`\nApproving ${pendingEmail.email_id}...`);
 
-    const humanResponse = new Command({
-      resume: { approved: true },
-    });
-
-    const config: GraphConfig = {
+    const config = {
       configurable: { thread_id: pendingEmail.thread_id },
     };
 
-    await app.invoke(humanResponse, config);
+    await app.invoke(
+      new Command({
+        resume: { approved: true },
+      }),
+      config
+    );
     console.log('Approved and sent');
   }
 }
@@ -631,13 +620,13 @@ export async function runInteractiveEmailDemo(): Promise<void> {
 
     const senderEmail = await getUserInput('Enter sender email: ');
 
-    const initialState: EmailAgentState = {
+    const initialState: Partial<EmailAgentState> = {
       email_content: emailContent,
       sender_email: senderEmail,
       email_id: generateId(),
     };
 
-    const config: GraphConfig = {
+    const config = {
       configurable: { thread_id: generateId() },
     };
 
@@ -658,21 +647,22 @@ export async function runInteractiveEmailDemo(): Promise<void> {
         editedResponse = await getUserInput('Enter edited response: ');
       }
 
-      const humanResponse = new Command({
-        resume: {
-          approved,
-          edited_response: editedResponse,
-        },
-      });
-
-      result = await app.invoke(humanResponse, config);
+      result = await app.invoke(
+        new Command({
+          resume: {
+            approved,
+            edited_response: editedResponse,
+          },
+        }),
+        config
+      );
     }
 
     console.log('\n✅ Email processed successfully!');
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
 
   if (args.includes('--batch')) {

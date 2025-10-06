@@ -7,31 +7,34 @@ import {
   Command,
   MemorySaver,
   interrupt,
-  Annotation,
 } from '@langchain/langgraph';
-import type { InterruptData } from '../types/index.js';
-import { getUserInput } from '../utils/index.js';
+import { registry } from '@langchain/langgraph/zod';
+import z from 'zod';
 
-const StateAnnotation = Annotation.Root({
-  nlist: Annotation<string[]>({
-    reducer: (left: string[], right: string[]) => [...left, ...right],
+import { getUserInput } from '../utils.js';
+
+const StateDefinition = z.object({
+  nlist: z.array(z.string()).register(registry, {
+    reducer: {
+      fn: (left: string[], right: string[]) => [...left, ...right],
+    },
     default: () => [],
   }),
 });
 
-type State = typeof StateAnnotation.State;
+type State = z.infer<typeof StateDefinition>;
 
 // Node function with interrupt capability
-function nodeA(state: State): Command {
+function nodeA(state: State) {
   console.log("Entered 'a' node");
   const select = state.nlist[state.nlist.length - 1];
   let nextNode: string;
 
   if (select === 'b') nextNode = 'b';
   else if (select === 'c') nextNode = 'c';
-  else if (select === 'q') nextNode = '__end__';
+  else if (select === 'q') nextNode = END;
   else {
-    // Interrupt for unexpected input - equivalent to Python's interrupt()
+    // Interrupt for unexpected input
     const admin = interrupt({
       message: `💥 Unexpected input ${select}! Continue? `,
     });
@@ -40,7 +43,7 @@ function nodeA(state: State): Command {
     if (admin === 'continue') {
       nextNode = 'b';
     } else {
-      nextNode = '__end__';
+      nextNode = END;
       // Update select to 'q' to indicate quit
       return new Command({
         update: { nlist: ['q'] },
@@ -55,42 +58,38 @@ function nodeA(state: State): Command {
   });
 }
 
-function nodeB(state: State): Partial<State> {
+function nodeB(state: State) {
   return { nlist: ['B'] };
 }
 
-function nodeC(state: State): Partial<State> {
+function nodeC(state: State) {
   return { nlist: ['C'] };
 }
 
-// Build graph with interrupts
-function createInterruptGraph() {
-  const builder = new StateGraph(StateAnnotation)
-    // Add all nodes
-    .addNode('a', nodeA)
-    .addNode('b', nodeB)
-    .addNode('c', nodeC)
-    // Add edges to create parallel execution paths
-    .addEdge(START, 'a')
-    .addEdge('b', END)
-    .addEdge('c', END);
+// Add in-memory persistence
+const memory = new MemorySaver();
 
-  const memory = new MemorySaver();
-  return builder.compile({ checkpointer: memory });
-}
+export const graph = new StateGraph(StateDefinition)
+  // Add all nodes
+  .addNode('a', nodeA, { ends: ['b', 'c', END] })
+  .addNode('b', nodeB)
+  .addNode('c', nodeC)
+  // Add edges to create parallel execution paths
+  .addEdge(START, 'a')
+  .addEdge('b', END)
+  .addEdge('c', END)
+  // Finally, compile the graph
+  .compile({ checkpointer: memory });
 
 // Check if result contains an interrupt
-function hasInterrupt(
-  result: any
-): result is { __interrupt__: InterruptData[] } {
+function hasInterrupt(result: any): result is { __interrupt__: any[] } {
   return result && result.__interrupt__ && Array.isArray(result.__interrupt__);
 }
 
 // Example usage with interrupt handling
-export async function runInterruptExample(): Promise<void> {
+if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('\n=== L1: Interrupts Example ===\n');
 
-  const graph = createInterruptGraph();
   const config = { configurable: { thread_id: '1' } };
 
   console.log(
@@ -115,17 +114,17 @@ export async function runInterruptExample(): Promise<void> {
       console.log(`${'-'.repeat(80)}`);
       console.log('Interrupt:', result);
 
-      const interruptMessage =
-        result.__interrupt__[result.__interrupt__.length - 1];
+      const interruptMessage = result.__interrupt__.at(-1);
       const msg = (interruptMessage as any).value?.message || 'Continue?';
       const human = await getUserInput(`\n${msg}: `);
 
       // Resume with human response
-      const humanResponse = new Command({
-        resume: human,
-      });
-
-      result = await graph.invoke(humanResponse, config);
+      result = await graph.invoke(
+        new Command({
+          resume: human,
+        }),
+        config
+      );
       console.log(`${'-'.repeat(80)}`);
     }
 
@@ -149,41 +148,4 @@ export async function runInterruptExample(): Promise<void> {
   console.log(
     '- Enables human oversight and intervention in automated workflows\n'
   );
-}
-
-// Demonstration of programmatic interrupt handling
-export async function runProgrammaticInterruptExample(): Promise<void> {
-  console.log('\n=== L1: Programmatic Interrupt Handling ===\n');
-
-  const graph = createInterruptGraph();
-  const config = { configurable: { thread_id: 'programmatic' } };
-
-  // Test with unexpected input
-  const inputState: State = {
-    nlist: ['unexpected_input'],
-  };
-
-  console.log('Testing with unexpected input:', inputState);
-  let result = await graph.invoke(inputState, config);
-
-  if (hasInterrupt(result)) {
-    console.log('Interrupt detected!');
-    console.log('Interrupt data:', result.__interrupt__);
-
-    // Programmatically respond to interrupt
-    console.log('Programmatically responding with "continue"');
-    const resumeCommand = new Command({
-      resume: 'continue',
-    });
-
-    result = await graph.invoke(resumeCommand, config);
-    console.log('Final result after resume:', result);
-  }
-}
-
-const args = process.argv.slice(2);
-if (args.includes('--programmatic')) {
-  runProgrammaticInterruptExample().catch(console.error);
-} else {
-  runInterruptExample().catch(console.error);
 }

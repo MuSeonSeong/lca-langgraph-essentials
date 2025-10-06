@@ -1,15 +1,19 @@
 // L1 Parallel Execution Example - Parallel edges and state merging
 
-import { StateGraph, START, END, Annotation } from '@langchain/langgraph';
+import { StateGraph, START, END } from '@langchain/langgraph';
+import { registry } from '@langchain/langgraph/zod';
+import z from 'zod';
 
-const StateAnnotation = Annotation.Root({
-  nlist: Annotation<string[]>({
-    reducer: (left: string[], right: string[]) => [...left, ...right],
+const StateDefinition = z.object({
+  nlist: z.array(z.string()).register(registry, {
+    reducer: {
+      fn: (left: string[], right: string[]) => [...left, ...right],
+    },
     default: () => [],
   }),
 });
 
-type State = typeof StateAnnotation.State;
+type State = z.infer<typeof StateDefinition>;
 
 function nodeA(state: State): Partial<State> {
   console.log(`Adding "A" to`, state.nlist);
@@ -41,34 +45,28 @@ function nodeD(state: State): Partial<State> {
   return { nlist: ['D'] };
 }
 
-// Build the parallel execution graph
-export function createParallelExecutionGraph() {
-  const builder = new StateGraph(StateAnnotation)
-    // Add all nodes
-    .addNode('a', nodeA)
-    .addNode('b', nodeB)
-    .addNode('bb', nodeBB)
-    .addNode('c', nodeC)
-    .addNode('cc', nodeCC)
-    .addNode('d', nodeD)
-    // Add edges to create parallel execution paths
-    .addEdge(START, 'a')
-    .addEdge('a', 'b')
-    .addEdge('a', 'c')
-    .addEdge('b', 'bb')
-    .addEdge('c', 'cc')
-    .addEdge('bb', 'd')
-    .addEdge('cc', 'd')
-    .addEdge('d', END);
+export const graph = new StateGraph(StateDefinition)
+  // Add all nodes
+  .addNode('a', nodeA)
+  .addNode('b', nodeB)
+  .addNode('bb', nodeBB)
+  .addNode('c', nodeC)
+  .addNode('cc', nodeCC)
+  .addNode('d', nodeD)
+  // Add edges to create parallel execution paths
+  .addEdge(START, 'a')
+  .addEdge('a', 'b')
+  .addEdge('a', 'c')
+  .addEdge('b', 'bb')
+  .addEdge('c', 'cc')
+  .addEdge('bb', 'd')
+  .addEdge('cc', 'd')
+  .addEdge('d', END)
+  // Finally, compile the graph
+  .compile();
 
-  return builder.compile();
-}
-
-// Example usage function
-export async function runParallelExecutionExample(): Promise<void> {
+if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('\n=== L1: Parallel Execution Example ===\n');
-
-  const graph = createParallelExecutionGraph();
 
   // Run the graph with initial state
   const initialState: State = {
@@ -90,5 +88,3 @@ export async function runParallelExecutionExample(): Promise<void> {
   console.log('- Results from nodes b, c are stored before starting bb and cc');
   console.log('- Control follows edges, not data\n');
 }
-
-runParallelExecutionExample().catch(console.error);

@@ -1,15 +1,19 @@
 // L1 Simple Node Example - Basic state/node functionality
 
-import { StateGraph, START, END, Annotation } from '@langchain/langgraph';
+import { StateGraph, START, END } from '@langchain/langgraph';
+import { registry } from '@langchain/langgraph/zod';
+import z from 'zod';
 
-const StateAnnotation = Annotation.Root({
-  nlist: Annotation<string[]>({
-    reducer: (left: string[], right: string[]) => [...left, ...right],
+const StateDefinition = z.object({
+  nlist: z.array(z.string()).register(registry, {
+    reducer: {
+      fn: (left: string[], right: string[]) => [...left, ...right],
+    },
     default: () => [],
   }),
 });
 
-type State = typeof StateAnnotation.State;
+type State = z.infer<typeof StateDefinition>;
 
 // Define the node function
 function nodeA(state: State): Partial<State> {
@@ -20,20 +24,14 @@ function nodeA(state: State): Partial<State> {
 }
 
 // Build the graph
-function createSimpleNodeGraph() {
-  const builder = new StateGraph(StateAnnotation)
-    .addNode('a', nodeA)
-    .addEdge(START, 'a')
-    .addEdge('a', END);
+export const graph = new StateGraph(StateDefinition)
+  .addNode('a', nodeA)
+  .addEdge(START, 'a')
+  .addEdge('a', END)
+  .compile();
 
-  return builder.compile();
-}
-
-// Example usage function
-export async function runSimpleNodeExample(): Promise<void> {
+if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('\n=== L1: Simple Node Example ===\n');
-
-  const graph = createSimpleNodeGraph();
 
   // Run the graph with initial state
   const initialState: State = {
@@ -58,5 +56,3 @@ export async function runSimpleNodeExample(): Promise<void> {
   );
   console.log('- Graph returns final value of state\n');
 }
-
-runSimpleNodeExample().catch(console.error);
