@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "01-simple-node": "src/L1/01-simple-node.ts:graph",
+    "02-parallel-execution": "src/L1/02-parallel-execution.ts:graph",
+    "03-conditional-edges": "src/L1/03-conditional-edges.ts:graph",
+    "04-memory": "src/L1/04-memory.ts:graph",
+    "05-interrupts": "src/L1/05-interrupts.ts:graph"
+  }
+}

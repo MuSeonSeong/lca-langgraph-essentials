@@ -1,5 +1,7 @@
 // Common utility functions for LangGraph Essentials
 
+import * as readline from 'readline';
+
 /**
  * Simple utility to create a delay/sleep function
  */
@@ -31,4 +33,19 @@ export function logWithTimestamp(message: string, data?: any): void {
   } else {
     console.log(`[${timestamp}] ${message}`);
   }
+}
+
+// Utility function for user input
+export function getUserInput(prompt: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
