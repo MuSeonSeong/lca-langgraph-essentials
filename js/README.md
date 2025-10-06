@@ -133,31 +133,12 @@ js/
 
 ```bash
 npm run build      # Compile TypeScript
-npm run dev        # Run with hot reload (tsx)
+npm run dev        # Run with langgraph studio 
 npm run lint       # Run ESLint
 npm run format     # Format with Prettier
 npm run typecheck  # TypeScript type checking
 npm run test       # Run tests
 npm run clean      # Clean build directory
-```
-
-## 📊 Graph Visualization
-
-The examples include console-based graph visualization for Node.js environments. For browser-based interactive visualization, the mermaid utilities in `utils/mermaid.ts` provide:
-
-- `displayGraphInConsole()` - ASCII graph output
-- `renderMermaidDiagram()` - Browser DOM rendering
-- `createMermaidHTML()` - Standalone HTML generation
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-npm run test
-
-# Run specific test files
-npm run test L1
-npm run test L2
 ```
 
 ## 📖 Learning Path
