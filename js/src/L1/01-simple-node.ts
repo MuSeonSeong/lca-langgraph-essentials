@@ -38,9 +38,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   console.log('\n=== Takeaways ===');
   console.log('- State: All nodes can share the same state');
-  console.log(
-    '- State can be any data type, commonly interfaces in TypeScript'
-  );
   console.log('- Nodes are just functions');
   console.log(
     '- Runtime initializes input state and determines which nodes to run'

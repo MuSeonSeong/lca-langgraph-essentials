@@ -13,7 +13,7 @@ import z from 'zod';
 const StateDefinition = z.object({
   nlist: z.array(z.string()).register(registry, {
     reducer: {
-      fn: (left: string[], right: string[]) => [...left, ...right],
+      fn: (left: string[], right: string[]) => left.concat(right),
     },
     default: () => [],
   }),

@@ -7,7 +7,7 @@ import z from 'zod';
 const StateDefinition = z.object({
   nlist: z.array(z.string()).register(registry, {
     reducer: {
-      fn: (left: string[], right: string[]) => [...left, ...right],
+      fn: (left: string[], right: string[]) => left.concat(right),
     },
     default: () => [],
   }),
@@ -15,32 +15,32 @@ const StateDefinition = z.object({
 
 type State = z.infer<typeof StateDefinition>;
 
-function nodeA(state: State): Partial<State> {
+function nodeA(state: State) {
   console.log(`Adding "A" to`, state.nlist);
   return { nlist: ['A'] };
 }
 
-function nodeB(state: State): Partial<State> {
+function nodeB(state: State) {
   console.log(`Adding "B" to`, state.nlist);
   return { nlist: ['B'] };
 }
 
-function nodeBB(state: State): Partial<State> {
+function nodeBB(state: State) {
   console.log(`Adding "BB" to`, state.nlist);
   return { nlist: ['BB'] };
 }
 
-function nodeC(state: State): Partial<State> {
+function nodeC(state: State) {
   console.log(`Adding "C" to`, state.nlist);
   return { nlist: ['C'] };
 }
 
-function nodeCC(state: State): Partial<State> {
+function nodeCC(state: State) {
   console.log(`Adding "CC" to`, state.nlist);
   return { nlist: ['CC'] };
 }
 
-function nodeD(state: State): Partial<State> {
+function nodeD(state: State) {
   console.log(`Adding "D" to`, state.nlist);
   return { nlist: ['D'] };
 }
