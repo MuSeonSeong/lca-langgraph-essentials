@@ -9,6 +9,7 @@ import {
 } from '@langchain/langgraph';
 import { registry } from '@langchain/langgraph/zod';
 import z from 'zod';
+import { getUserInput } from '../utils.js';
 
 const StateDefinition = z.object({
   nlist: z.array(z.string()).register(registry, {
@@ -23,7 +24,7 @@ type State = z.infer<typeof StateDefinition>;
 
 // Reuse the conditional node logic from previous example
 function nodeA(state: State): Command {
-  const select = state.nlist[state.nlist.length - 1];
+  const select = state.nlist.at(-1);
   let nextNode: string;
 
   if (select === 'b') nextNode = 'b';
@@ -32,7 +33,7 @@ function nodeA(state: State): Command {
   else nextNode = END;
 
   return new Command({
-    update: { nlist: [select] },
+    update: {},
     goto: nextNode,
   });
 }
@@ -64,36 +65,45 @@ export const graph = new StateGraph(StateDefinition)
 if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('\n=== L1: Multi-Thread Memory Example ===\n');
 
-  const thread1Config = {
-    configurable: { thread_id: 'thread-1' },
-  };
-  const thread2Config = {
-    configurable: { thread_id: 'thread-2' },
-  };
+  console.log(
+    'This example demonstrates multi-threaded execution with memory/checkpointer.'
+  );
+  console.log(
+    'Try running the graph with different thread IDs to see how state is maintained across threads.'
+  );
 
-  // Run some operations on thread 1
-  console.log('=== Thread 1 Operations ===');
-  let result1 = await graph.invoke({ nlist: ['b'] }, thread1Config);
-  console.log('Thread 1 after "b":', result1);
+  while (true) {
+    const threadId = await getUserInput('Enter thread ID, or q to quit: ');
 
-  result1 = await graph.invoke({ nlist: ['c'] }, thread1Config);
-  console.log('Thread 1 after "c":', result1);
+    if (threadId === 'q') {
+      console.log('Quitting...');
+      break;
+    }
 
-  // Run some operations on thread 2
-  console.log('\n=== Thread 2 Operations ===');
-  let result2 = await graph.invoke({ nlist: ['c'] }, thread2Config);
-  console.log('Thread 2 after "c":', result2);
+    const config = {
+      configurable: { thread_id: threadId },
+    };
 
-  result2 = await graph.invoke({ nlist: ['b'] }, thread2Config);
-  console.log('Thread 2 after "b":', result2);
+    console.log(`=== Thread '${threadId}' Operations ===`);
 
-  // Show that threads maintain separate state
-  console.log('\n=== Final States ===');
-  const finalResult1 = await graph.invoke({ nlist: ['q'] }, thread1Config);
-  console.log('Thread 1 final state:', finalResult1);
+    while (true) {
+      console.log(
+        'Enter "b" to go to node B, "c" to go to node C, or "q" to quit.\n'
+      );
 
-  const finalResult2 = await graph.invoke({ nlist: ['q'] }, thread2Config);
-  console.log('Thread 2 final state:', finalResult2);
+      const input = await getUserInput('b, c, or q to quit: ');
+      const inputState: State = {
+        nlist: [input],
+      };
 
+      const result = await graph.invoke(inputState, config);
+      console.log(`Thread '${threadId}' after '${input}': ${result}`);
+
+      if (result.nlist.at(-1) === 'q') {
+        console.log('Exitting thread...');
+        break;
+      }
+    }
+  }
   console.log('\nNotice how each thread maintains its own separate state!');
 }

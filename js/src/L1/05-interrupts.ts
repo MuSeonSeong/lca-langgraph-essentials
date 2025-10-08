@@ -53,7 +53,7 @@ function nodeA(state: State) {
   }
 
   return new Command({
-    update: { nlist: [select] },
+    update: {},
     goto: nextNode,
   });
 }
@@ -90,49 +90,59 @@ function hasInterrupt(result: any): result is { __interrupt__: any[] } {
 if (import.meta.url === `file://${process.argv[1]}`) {
   console.log('\n=== L1: Interrupts Example ===\n');
 
-  const config = { configurable: { thread_id: '1' } };
-
   console.log(
     'This example demonstrates human-in-the-loop patterns with interrupts.'
   );
-  console.log(
-    'Try entering unexpected input (not "b", "c", or "q") to trigger an interrupt.\n'
-  );
 
-  // Interactive loop with interrupt handling
   while (true) {
-    const user = await getUserInput('b, c, or q to quit: ');
+    const threadId = await getUserInput('Enter thread ID, or q to quit: ');
 
-    const inputState: State = {
-      nlist: [user],
-    };
-
-    let result = await graph.invoke(inputState, config);
-
-    // Check if an interrupt occurred
-    if (hasInterrupt(result)) {
-      console.log(`${'-'.repeat(80)}`);
-      console.log('Interrupt:', result);
-
-      const interruptMessage = result.__interrupt__.at(-1);
-      const msg = (interruptMessage as any).value?.message || 'Continue?';
-      const human = await getUserInput(`\n${msg}: `);
-
-      // Resume with human response
-      result = await graph.invoke(
-        new Command({
-          resume: human,
-        }),
-        config
-      );
-      console.log(`${'-'.repeat(80)}`);
+    if (threadId === 'q') {
+      console.log('Quitting...');
+      break;
     }
 
-    console.log(result);
+    const config = {
+      configurable: { thread_id: threadId },
+    };
 
-    if (result.nlist[result.nlist.length - 1] === 'q') {
-      console.log('quit');
-      break;
+    console.log(`=== Thread '${threadId}' Operations ===`);
+
+    while (true) {
+      console.log(
+        'Enter "b" to go to node B, "c" to go to node C, or "q" to quit.\n'
+      );
+      console.log(
+        'Try entering unexpected input (not "b", "c", or "q") to trigger an interrupt.\n'
+      );
+
+      const input = await getUserInput('b, c, or q to quit: ');
+      const inputState: State = {
+        nlist: [input],
+      };
+
+      let result = await graph.invoke(inputState, config);
+
+      // Check if an interrupt occurred
+      if (hasInterrupt(result)) {
+        console.log(`${'-'.repeat(80)}`);
+        console.log('Interrupt:', result);
+
+        const interruptMessage = result.__interrupt__.at(-1);
+        const msg = interruptMessage.value?.message || 'Continue?';
+        const human = await getUserInput(`\n${msg}: `);
+
+        // Resume with human response
+        result = await graph.invoke(new Command({ resume: human }), config);
+        console.log(`${'-'.repeat(80)}`);
+      }
+
+      console.log(`Thread '${threadId}' after '${input}': '${result}'`);
+
+      if (result.nlist.at(-1) === 'q') {
+        console.log('Exitting thread...');
+        break;
+      }
     }
   }
 

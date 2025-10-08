@@ -3,10 +3,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import z from 'zod';
 
-const llm = new ChatOpenAI({
-  model: 'gpt-5',
-  temperature: 0,
-});
+const llm = new ChatOpenAI({ model: 'gpt-5' });
 
 export const EmailClassificationSchema = z.object({
   intent: z.enum(['question', 'bug', 'billing', 'feature', 'complex']),
