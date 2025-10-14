@@ -1,7 +1,8 @@
-# 🔗 LangGraph Essentails V1.0
+<span style="font-size: 5em">🦜</span>
+
+# __LangGraph Essentails__
 
 <img width="720" height="289" alt="Screenshot 2025-08-12 at 2 13 54 PM" src="" />
-
 
 
 * **LangGraph Introduction**
@@ -70,9 +71,9 @@ jupyter lab
 
 ## 📚 Tutorial Overview
 
-This repository contains two notebooks. The first covers the foundations of LangGraph that will enable you to build any workflow or AI agent. In the second, you will build an example LangGraph workflow.
+This repository contains notebooks for Labs 1-5, and an additional notebook showcasing an end-to-end email agent. These labs cover the foundations of LangGraph that will enable you to build any workflow or agent.
 
-### `L1.ipynb` - StateGraph Essentials
+### `L1-5.ipynb` - LangGraph Essentials
 - You will use all the components of LangGraph
     - State and Nodes
     - Edges
@@ -81,7 +82,6 @@ This repository contains two notebooks. The first covers the foundations of Lang
     - Memory
     - Interrupts/ Human-In-The-Loop  
 
-### `L2.ipynb` - Build A Workflow
+### `EmailAgent.ipynb` - Build A Workflow
 Learn to implement structured workflow to process customer emails. This notebook utilizes all of the building blocks from the first notebook in an example application.:
 - Task tracking with status management (pending/in_progress/completed)  
-
