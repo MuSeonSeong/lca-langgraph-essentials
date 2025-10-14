@@ -27,7 +27,7 @@ type State = z.infer<typeof StateDefinition>;
 // Node function with interrupt capability
 function nodeA(state: State) {
   console.log("Entered 'a' node");
-  const select = state.nlist[state.nlist.length - 1];
+  const select = state.nlist.at(-1);
   let nextNode: string;
 
   if (select === 'b') nextNode = 'b';
@@ -71,7 +71,7 @@ const memory = new MemorySaver();
 
 export const graph = new StateGraph(StateDefinition)
   // Add all nodes
-  .addNode('a', nodeA, { ends: ['b', 'c', END] })
+  .addNode('a', nodeA, { ends: ['b', 'c'] })
   .addNode('b', nodeB)
   .addNode('c', nodeC)
   // Add edges to create parallel execution paths
@@ -137,7 +137,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         console.log(`${'-'.repeat(80)}`);
       }
 
-      console.log(`Thread '${threadId}' after '${input}': '${result}'`);
+      console.log(`Thread '${threadId}' after '${input}':`, result);
 
       if (result.nlist.at(-1) === 'q') {
         console.log('Exitting thread...');
