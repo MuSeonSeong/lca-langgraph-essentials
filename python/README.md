@@ -1,15 +1,7 @@
-<span style="font-size: 5em">🦜</span>
+## 🦜
+# __LangGraph Essentials__
 
-# __LangGraph Essentails__
-
-<img width="720" height="289" alt="Screenshot 2025-08-12 at 2 13 54 PM" src="" />
-
-
-* **LangGraph Introduction**
-* **LangGraph foundations**
-* **Build an application**
-
-This course will show how to implement these patterns from scratch using LangGraph! 
+This course will cover an introduction to key LangGraph concepts: State, Nodes, Edges, Memory, and Interrupts. It consists of five core labs and one cumulative tutorial demonstrating how to build a production-style email support workflow.
 
 ## 🚀 Quickstart 
 
