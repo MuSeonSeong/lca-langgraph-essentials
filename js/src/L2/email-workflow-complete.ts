@@ -7,23 +7,14 @@ import {
   Command,
   MemorySaver,
   interrupt,
-  Annotation,
 } from '@langchain/langgraph';
 import { ChatOpenAI } from '@langchain/openai';
-import { generateId, getUserInput } from '../utils.js';
+import { generateId } from '../utils.js';
 import z from 'zod';
 
 const llm = new ChatOpenAI({
   model: 'gpt-5',
-  temperature: 0,
 });
-
-export interface EmailClassification {
-  intent: 'question' | 'bug' | 'billing' | 'feature' | 'complex';
-  urgency: 'low' | 'medium' | 'high' | 'critical';
-  topic: string;
-  summary: string;
-}
 
 export const EmailClassificationSchema = z.object({
   intent: z.enum(['question', 'bug', 'billing', 'feature', 'complex']),
@@ -385,32 +376,16 @@ async function humanReview(state: EmailAgentState) {
     action: 'Please review and approve/edit this response',
   });
 
-  // Process the human's decision
-  if (
-    humanDecision &&
-    typeof humanDecision === 'object' &&
-    'approved' in humanDecision
-  ) {
-    if (humanDecision.approved) {
-      const editedResponse =
-        humanDecision.editedResponse ?? state.draftResponse;
-      return new Command({
-        update: { draftResponse: editedResponse },
-        goto: 'send_reply',
-      });
-    } else {
-      // Rejection means human will handle directly
-      return new Command({
-        update: {},
-        goto: END,
-      });
-    }
+  if (humanDecision.approved) {
+    const editedResponse = humanDecision.editedResponse ?? state.draftResponse;
+    return new Command({
+      update: { draftResponse: editedResponse },
+      goto: 'send_reply',
+    });
   }
-
-  // Default: continue to send reply
   return new Command({
     update: {},
-    goto: 'send_reply',
+    goto: END,
   });
 }
 
@@ -451,210 +426,24 @@ async function sendReply(
   return {};
 }
 
-// Build the Email Workflow Graph
-export function createEmailWorkflowGraph() {
-  const builder = new StateGraph(EmailStateDefinition)
-    // Add nodes - nodes with Command returns need ends arrays
-    .addNode('read_email', readEmail)
-    .addNode('classify_intent', classifyIntent)
-    .addNode('search_documentation', searchDocumentation)
-    .addNode('bug_tracking', bugTracking)
-    .addNode('write_response', writeResponse)
-    .addNode('human_review', humanReview)
-    .addNode('send_reply', sendReply)
-    // Add edges
-    .addEdge(START, 'read_email')
-    .addEdge('read_email', 'classify_intent')
-    .addEdge('classify_intent', 'search_documentation')
-    .addEdge('classify_intent', 'bug_tracking')
-    .addEdge('search_documentation', 'write_response')
-    .addEdge('bug_tracking', 'write_response')
-    .addEdge('send_reply', END);
+const memory = new MemorySaver();
 
+export const graph = new StateGraph(EmailStateDefinition)
+  // Add nodes - nodes with Command returns need ends arrays
+  .addNode('read_email', readEmail)
+  .addNode('classify_intent', classifyIntent)
+  .addNode('search_documentation', searchDocumentation)
+  .addNode('bug_tracking', bugTracking)
+  .addNode('write_response', writeResponse)
+  .addNode('human_review', humanReview)
+  .addNode('send_reply', sendReply)
+  // Add edges
+  .addEdge(START, 'read_email')
+  .addEdge('read_email', 'classify_intent')
+  .addEdge('classify_intent', 'search_documentation')
+  .addEdge('classify_intent', 'bug_tracking')
+  .addEdge('search_documentation', 'write_response')
+  .addEdge('bug_tracking', 'write_response')
+  .addEdge('send_reply', END)
   // Compile with checkpointer for persistence
-  const memory = new MemorySaver();
-  return builder.compile({ checkpointer: memory });
-}
-
-function hasInterrupt(result: any): boolean {
-  return result && result.__interrupt__ && Array.isArray(result.__interrupt__);
-}
-
-// Example Usage Functions
-
-/**
- * Run a single email workflow example
- */
-export async function runSingleEmailExample(): Promise<void> {
-  console.log('\n=== L2: Email Workflow Example ===\n');
-
-  const app = createEmailWorkflowGraph();
-
-  // Test with an urgent billing issue
-  const initialState: Partial<EmailAgentState> = {
-    emailContent: 'I was charged twice for my subscription! This is urgent!',
-    senderEmail: 'customer@example.com',
-    emailId: 'email_123',
-  };
-
-  const config = {
-    configurable: { thread_id: 'customer_123' },
-  };
-
-  console.log('Processing email:', initialState.emailContent);
-  console.log('From:', initialState.senderEmail);
-
-  let result = await app.invoke(initialState, config);
-
-  // Handle potential interrupt
-  if (hasInterrupt(result)) {
-    console.log(
-      `\nDraft ready for review: ${result.draftResponse?.substring(0, 60)}...\n`
-    );
-
-    // Simulate human approval
-    result = await app.invoke(
-      new Command({ resume: { approved: true } }),
-      config
-    );
-    console.log('Email sent successfully!');
-  }
-
-  console.log('\nFinal state keys:', Object.keys(result));
-}
-
-/**
- * Run batch email processing example
- */
-export async function runBatchEmailExample(): Promise<void> {
-  console.log('\n=== L2: Batch Email Processing ===\n');
-
-  const app = createEmailWorkflowGraph();
-
-  const emailContent = [
-    'I was charged two times for my subscription! This is urgent!',
-    'I was wondering if this was available in blue?',
-    'Can you tell me how long the sale is on?',
-    "The tire won't stay on the car!",
-    'My subscription is going to end in a few months, what is the new rate?',
-  ];
-
-  const needsApproval: any[] = [];
-
-  for (const [i, content] of emailContent.entries()) {
-    const initialState: Partial<EmailAgentState> = {
-      emailContent: content,
-      senderEmail: 'customer@example.com',
-      emailId: `email_${i}`,
-    };
-
-    console.log(`${initialState.emailId}: `, '');
-
-    const threadId = generateId();
-    const config = {
-      configurable: { thread_id: threadId },
-    };
-
-    const result = await app.invoke(initialState, config);
-
-    if (hasInterrupt(result)) {
-      console.log('Needs approval');
-      needsApproval.push({ ...result, thread_id: threadId });
-    } else {
-      console.log('Auto-sent');
-    }
-  }
-
-  console.log(`\n${needsApproval.length} emails need approval`);
-
-  // Process approval queue
-  for (const pendingEmail of needsApproval) {
-    console.log(`\nApproving ${pendingEmail.email_id}...`);
-
-    const config = {
-      configurable: { thread_id: pendingEmail.thread_id },
-    };
-
-    await app.invoke(
-      new Command({
-        resume: { approved: true },
-      }),
-      config
-    );
-    console.log('Approved and sent');
-  }
-}
-
-/**
- * Interactive email workflow demo
- */
-export async function runInteractiveEmailDemo(): Promise<void> {
-  console.log('\n=== L2: Interactive Email Demo ===\n');
-
-  const app = createEmailWorkflowGraph();
-
-  while (true) {
-    console.log('\n--- New Email ---');
-    const emailContent = await getUserInput(
-      'Enter email content (or "quit" to exit): '
-    );
-
-    if (emailContent.toLowerCase() === 'quit') {
-      break;
-    }
-
-    const senderEmail = await getUserInput('Enter sender email: ');
-
-    const initialState: Partial<EmailAgentState> = {
-      emailContent: emailContent,
-      senderEmail: senderEmail,
-      emailId: generateId(),
-    };
-
-    const config = {
-      configurable: { thread_id: generateId() },
-    };
-
-    let result = await app.invoke(initialState, config);
-
-    if (hasInterrupt(result)) {
-      console.log(`\n${'-'.repeat(50)}`);
-      console.log('HUMAN REVIEW REQUIRED');
-      console.log(`${'-'.repeat(50)}`);
-      console.log('Draft response:', result.draftResponse);
-
-      const approval = await getUserInput('Approve this response? (y/n): ');
-      const approved =
-        approval.toLowerCase() === 'y' || approval.toLowerCase() === 'yes';
-
-      let editedResponse = result.draftResponse;
-      if (approved && approval.toLowerCase() !== 'y') {
-        editedResponse = await getUserInput('Enter edited response: ');
-      }
-
-      result = await app.invoke(
-        new Command({
-          resume: {
-            approved,
-            editedResponse,
-          },
-        }),
-        config
-      );
-    }
-
-    console.log('\n✅ Email processed successfully!');
-  }
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
-
-  if (args.includes('--batch')) {
-    runBatchEmailExample().catch(console.error);
-  } else if (args.includes('--interactive')) {
-    runInteractiveEmailDemo().catch(console.error);
-  } else {
-    runSingleEmailExample().catch(console.error);
-  }
-}
+  .compile({ checkpointer: memory });

@@ -97,7 +97,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       };
 
       const result = await graph.invoke(inputState, config);
-      console.log(`Thread '${threadId}' after '${input}': ${result}`);
+      console.log(`Thread '${threadId}' after '${input}':`, result);
 
       if (result.nlist.at(-1) === 'q') {
         console.log('Exitting thread...');
