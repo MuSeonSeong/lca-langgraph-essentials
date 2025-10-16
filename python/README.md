@@ -48,11 +48,6 @@ Add your API keys to the `.env` file:
 
 # Required for model usage
 OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional: For evaluation and tracing
-LANGSMITH_API_KEY=your_langsmith_api_key_here
-LANGSMITH_TRACING=true
-LANGSMITH_PROJECT=lc-essentials
 ```
 
 4. Run notebooks or code:
@@ -63,6 +58,33 @@ uv run jupyter lab
 # Or activate the virtual environment if preferred
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 jupyter lab
+```
+
+5. Setup LangSmith Studio
+
+```bash
+# copy the .env file you created above to the studio directory
+cp .env ./studio/.
+
+#to run
+langgraph dev
+```
+For more information on the LangSmith Studio, see the [documentation](https://docs.langchain.com/oss/python/langchain/studio)
+
+6. **Optional:** LangSmith for evaluation and tracing
+
+- Create a [LangSmith](https://smith.langchain.com/) account
+- Create a LangSmith API key
+<img width="1196" height="693" alt="Screenshot 2025-10-16 at 8 28 03 AM" src="https://github.com/user-attachments/assets/e39b8364-c3e3-4c75-a287-d9d4685caad5" />
+<img width="1196" height="468" alt="Screenshot 2025-10-16 at 8 29 57 AM" src="https://github.com/user-attachments/assets/2e916b2d-e3b0-4c59-a178-c5818604b8fe" />
+
+- Add your API key to your .env file
+```env
+
+# Optional: For evaluation and tracing
+LANGSMITH_API_KEY=your_langsmith_api_key_here
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=lc-essentials
 ```
 
 ## 📚 Tutorial Overview
