@@ -7,7 +7,7 @@ This course will cover an introduction to key LangGraph concepts: State, Nodes, 
 
 ### Prerequisites
 
-- Ensure you're using Python 3.11 or later.
+- Ensure you're using Python 3.11 - 3.13.
 - This version is required for optimal compatibility with LangGraph.
 ```bash
 python3 --version
