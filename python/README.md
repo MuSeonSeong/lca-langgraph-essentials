@@ -21,14 +21,11 @@ git clone https://github.com/langchain-ai/lca-langgraph-essentials.git
 cd ./lca-langgraph-essentials/python
 ```
 
-Create our environment
+Make a copy of example.env
 
 ```bash
 # Create .env file
 cp example.env .env
-
-# Create virtual environment and install dependancies
-uv sync
 ```
 
 Insert API keys directly into .env file, OpenAI (required) and [LangSmith](#getting-started-with-langsmith) (optional)
@@ -37,10 +34,16 @@ Insert API keys directly into .env file, OpenAI (required) and [LangSmith](#gett
 # Add OpenAI API key
 OPENAI_API_KEY=your_openai_api_key_here
 
-# Optional for LangSmith tracing
+# Optional API key for LangSmith tracing
 LANGSMITH_API_KEY=your_langsmith_api_key_here
 LANGSMITH_TRACING=true
 LANGSMITH_PROJECT=langgraph-py-essentials
+```
+
+Make a virtual environment and install dependancies
+```bash
+# Create virtual environment and install dependancies
+uv sync
 ```
 
 Run notebooks
