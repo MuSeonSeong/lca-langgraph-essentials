@@ -83,7 +83,7 @@ Learn to implement a structured workflow to process customer emails. This lab ut
 pnpm tsx src/L1/01-simple-node.ts
 pnpm tsx src/L1/02-parallel-execution.ts
 pnpm tsx src/L1/03-conditional-edges.ts 
-pnpm tsx src/L1/03-conditional-edge-router.td
+pnpm tsx src/L1/03-conditional-edge-router.ts
 pnpm tsx src/L1/04-memory.ts
 pnpm tsx src/L1/05-interrupts.ts 
 ```
