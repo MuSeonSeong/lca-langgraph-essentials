@@ -55,26 +55,6 @@ pnpm install
 <img width="1196" height="468" alt="Screenshot 2025-10-16 at 8 29 57 AM" src="https://github.com/user-attachments/assets/2e916b2d-e3b0-4c59-a178-c5818604b8fe" />
 
 
-
-## 📚 Tutorial Overview
-
-This repository contains notebooks for Labs 1-5, and an additional notebook showcasing an end-to-end email agent. These labs cover the foundations of LangGraph that will enable you to build any workflow or agent.
-
-### `L1-5.ipynb` - LangGraph Essentials
-- You will use all the components of LangGraph
-    - State and Nodes
-    - Edges
-        - Parallel
-        - Conditional
-    - Memory
-    - Interrupts/ Human-In-The-Loop  
-
-### `EmailAgent.ipynb` - Build A Workflow
-Learn to implement a structured workflow to process customer emails. This lab utilizes all of the building blocks from the first labs in an example application.:
-- Task tracking with status management (pending/in_progress/completed)  
-
-
-
 ## 🎯 Running Examples
 
 ### Individual L1 Examples
