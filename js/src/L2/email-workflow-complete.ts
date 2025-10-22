@@ -13,7 +13,7 @@ import { generateId } from '../utils.js';
 import z from 'zod';
 
 const llm = new ChatOpenAI({
-  model: 'gpt-5',
+  model: 'gpt-5-nano',
 });
 
 export const EmailClassificationSchema = z.object({
